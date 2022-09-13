@@ -104,7 +104,7 @@ resource "google_project_iam_audit_config" "project-audit_config" {
 
   }
   audit_log_config {
-    1og_type = "DATA_WRITE"
+    log_type = "DATA_WRITE"
     exempted_members = [
    ]
   }
@@ -154,7 +154,7 @@ resource "google_project_iam_member" "gke_wi_service_account_bindings" {
     for binding in local.wi_role_bindings : "${binding.service} | ${binding.role}" => binding
 }
   project = module.main_project.project_id
-  role    = each.value.role
+  role    =each.value.role
 
   member  =  "serviceAccount:${each.value.service}@${module.main_project.project_id}.iam.gserviceaccount.com"
   depends_on = [
