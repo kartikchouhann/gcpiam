@@ -1,6 +1,4 @@
 #!/bin/bash
-# Force delete all stacks stuck in DELETE_FAILED
-# Retains only real buckets that still exist, skips deleted ones
 
 for stack in $(aws cloudformation list-stacks \
   --stack-status-filter DELETE_FAILED \
@@ -9,24 +7,29 @@ for stack in $(aws cloudformation list-stacks \
 
   echo "🔍 Checking stack: $stack"
 
-  # List buckets with DELETE_FAILED or CREATE_COMPLETE (still exist)
+  # Get only buckets still in DELETE_FAILED (not DELETE_COMPLETE)
   buckets=$(aws cloudformation describe-stack-resources --stack-name "$stack" \
-    --query "StackResources[?ResourceType=='AWS::S3::Bucket' && (ResourceStatus=='DELETE_FAILED' || ResourceStatus=='CREATE_COMPLETE')].PhysicalResourceId" \
+    --query "StackResources[?ResourceType=='AWS::S3::Bucket' && ResourceStatus=='DELETE_FAILED'].PhysicalResourceId" \
     --output text)
 
-  # Filter out buckets that no longer exist in S3
-  valid_buckets=()
-  for bucket in $buckets; do
-    if aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
-      valid_buckets+=("$bucket")
-    fi
-  done
+  if [ -n "$buckets" ]; then
+    echo "🪣 Found DELETE_FAILED buckets: $buckets"
+    echo "   -> Emptying buckets before retry..."
+    for bucket in $buckets; do
+      aws s3 rm s3://$bucket --recursive --quiet || true
+      # Also delete versions if versioning was on
+      aws s3api list-object-versions --bucket "$bucket" --output json \
+        --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' | \
+        jq -e '.Objects | length > 0' >/dev/null 2>&1 && \
+        aws s3api delete-objects --bucket "$bucket" \
+          --delete "$(aws s3api list-object-versions --bucket "$bucket" \
+          --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)" || true
+    done
 
-  if [ ${#valid_buckets[@]} -gt 0 ]; then
-    echo "🪣 Retaining existing buckets: ${valid_buckets[*]}"
-    aws cloudformation delete-stack --stack-name "$stack" --retain-resources ${valid_buckets[*]} || true
+    echo "🧹 Retrying delete for $stack"
+    aws cloudformation delete-stack --stack-name "$stack" || true
   else
-    echo "🧹 No valid buckets to retain — normal delete"
+    echo "✅ No failed S3 buckets found — direct delete"
     aws cloudformation delete-stack --stack-name "$stack" || true
   fi
 done
