@@ -1,0 +1,4 @@
+for stack in $(aws cloudformation list-stacks --stack-status-filter DELETE_FAILED --query "StackSummaries[].StackName" --output text); do
+  echo "Forcing delete: $stack"
+  aws cloudformation delete-stack --stack-name "$stack" --retain-resources '' || true
+done
