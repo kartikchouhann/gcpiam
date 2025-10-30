@@ -1,3 +1,7 @@
+#!/bin/bash
+# Force delete all stacks stuck in DELETE_FAILED
+# Retains only real buckets that still exist, skips deleted ones
+
 for stack in $(aws cloudformation list-stacks \
   --stack-status-filter DELETE_FAILED \
   --query "StackSummaries[].StackName" \
@@ -5,16 +9,24 @@ for stack in $(aws cloudformation list-stacks \
 
   echo "🔍 Checking stack: $stack"
 
-  # Get only buckets in DELETE_FAILED (not DELETE_COMPLETE)
+  # List buckets with DELETE_FAILED or CREATE_COMPLETE (still exist)
   buckets=$(aws cloudformation describe-stack-resources --stack-name "$stack" \
-    --query "StackResources[?ResourceType=='AWS::S3::Bucket' && ResourceStatus=='DELETE_FAILED'].PhysicalResourceId" \
+    --query "StackResources[?ResourceType=='AWS::S3::Bucket' && (ResourceStatus=='DELETE_FAILED' || ResourceStatus=='CREATE_COMPLETE')].PhysicalResourceId" \
     --output text)
 
-  if [ -n "$buckets" ]; then
-    echo "🪣 Retaining buckets: $buckets"
-    aws cloudformation delete-stack --stack-name "$stack" --retain-resources $buckets || true
+  # Filter out buckets that no longer exist in S3
+  valid_buckets=()
+  for bucket in $buckets; do
+    if aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
+      valid_buckets+=("$bucket")
+    fi
+  done
+
+  if [ ${#valid_buckets[@]} -gt 0 ]; then
+    echo "🪣 Retaining existing buckets: ${valid_buckets[*]}"
+    aws cloudformation delete-stack --stack-name "$stack" --retain-resources ${valid_buckets[*]} || true
   else
-    echo "🧹 No S3 buckets to retain — performing normal delete"
+    echo "🧹 No valid buckets to retain — normal delete"
     aws cloudformation delete-stack --stack-name "$stack" || true
   fi
 done
