@@ -1,4 +1,17 @@
+# Delete all DELETE_FAILED stacks, but retain the S3 buckets that block deletion
 for stack in $(aws cloudformation list-stacks --stack-status-filter DELETE_FAILED --query "StackSummaries[].StackName" --output text); do
-  echo "Forcing delete: $stack"
-  aws cloudformation delete-stack --stack-name "$stack" --retain-resources '' || true
+  echo "🔍 Checking stack: $stack"
+
+  # Find any S3 buckets in the stack
+  buckets=$(aws cloudformation describe-stack-resources --stack-name "$stack" \
+    --query "StackResources[?ResourceType=='AWS::S3::Bucket'].PhysicalResourceId" \
+    --output text)
+
+  if [ -n "$buckets" ]; then
+    echo "🪣 Retaining buckets: $buckets"
+    aws cloudformation delete-stack --stack-name "$stack" --retain-resources $buckets || true
+  else
+    echo "🧹 No S3 buckets found — normal delete"
+    aws cloudformation delete-stack --stack-name "$stack" || true
+  fi
 done
