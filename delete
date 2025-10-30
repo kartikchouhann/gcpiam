@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Force delete all DELETE_FAILED stacks
+# Properly empties versioned buckets before retrying delete
+
 for stack in $(aws cloudformation list-stacks \
   --stack-status-filter DELETE_FAILED \
   --query "StackSummaries[].StackName" \
@@ -7,29 +10,39 @@ for stack in $(aws cloudformation list-stacks \
 
   echo "🔍 Checking stack: $stack"
 
-  # Get only buckets still in DELETE_FAILED (not DELETE_COMPLETE)
+  # Find buckets that failed deletion
   buckets=$(aws cloudformation describe-stack-resources --stack-name "$stack" \
     --query "StackResources[?ResourceType=='AWS::S3::Bucket' && ResourceStatus=='DELETE_FAILED'].PhysicalResourceId" \
     --output text)
 
   if [ -n "$buckets" ]; then
-    echo "🪣 Found DELETE_FAILED buckets: $buckets"
-    echo "   -> Emptying buckets before retry..."
     for bucket in $buckets; do
-      aws s3 rm s3://$bucket --recursive --quiet || true
-      # Also delete versions if versioning was on
-      aws s3api list-object-versions --bucket "$bucket" --output json \
-        --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' | \
-        jq -e '.Objects | length > 0' >/dev/null 2>&1 && \
-        aws s3api delete-objects --bucket "$bucket" \
-          --delete "$(aws s3api list-object-versions --bucket "$bucket" \
-          --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)" || true
-    done
+      echo "🪣 Emptying bucket: $bucket (all versions + delete markers)"
 
-    echo "🧹 Retrying delete for $stack"
-    aws cloudformation delete-stack --stack-name "$stack" || true
-  else
-    echo "✅ No failed S3 buckets found — direct delete"
-    aws cloudformation delete-stack --stack-name "$stack" || true
+      # Delete all object versions
+      versions=$(aws s3api list-object-versions --bucket "$bucket" --output json \
+        --query "{Objects: Versions[].{Key:Key,VersionId:VersionId}}")
+
+      if [ "$(echo $versions | jq '.Objects | length')" -gt 0 ]; then
+        echo "   - Deleting $(echo $versions | jq '.Objects | length') versions..."
+        aws s3api delete-objects --bucket "$bucket" --delete "$versions" || true
+      fi
+
+      # Delete all delete markers
+      markers=$(aws s3api list-object-versions --bucket "$bucket" --output json \
+        --query "{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}")
+
+      if [ "$(echo $markers | jq '.Objects | length')" -gt 0 ]; then
+        echo "   - Deleting $(echo $markers | jq '.Objects | length') delete markers..."
+        aws s3api delete-objects --bucket "$bucket" --delete "$markers" || true
+      fi
+
+      # Try a final empty + force remove for safety
+      aws s3 rm s3://$bucket --recursive || true
+      aws s3 rb s3://$bucket --force || true
+    done
   fi
+
+  echo "🧹 Retrying stack delete: $stack"
+  aws cloudformation delete-stack --stack-name "$stack" || true
 done
