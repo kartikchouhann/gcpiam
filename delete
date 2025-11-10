@@ -1,3 +1,39 @@
+✅ Correct AWS CLI v2 ZIP Download Link (for Windows, no admin)
+Use this exact command (copy–paste as is):
+Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.zip" -OutFile "$env:USERPROFILE\Downloads\AWSCLIV2.zip"
+
+🔹 Notice there’s no “cli.” before amazonaws.com.
+The correct domain is awscli.amazonaws.com, not awscli.amazonaws.com/cli.
+
+🧩 Next Steps (After Successful Download)
+1️⃣ Extract it
+Expand-Archive "$env:USERPROFILE\Downloads\AWSCLIV2.zip" -DestinationPath "$env:USERPROFILE\AWSCLI"
+
+2️⃣ Add to PATH for this session
+$env:PATH += ";$env:USERPROFILE\AWSCLI\AWSCLIV2"
+
+3️⃣ Test it
+aws --version
+
+✅ You should now see the AWS CLI version info.
+
+Would you like me to give you a ready-to-run script that does all three steps (download, extract, and set path) automatically for your current VS Code PowerShell terminal — no admin rights needed?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ⚙️ Step-by-Step: Install & Use AWS CLI in VS Code (No Admin Rights)
 🧩 1️⃣ Download the Portable ZIP Installer
 
