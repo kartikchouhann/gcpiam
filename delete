@@ -1,3 +1,97 @@
+🧩 Enhanced Bash Script — copy_s3_files_with_log.sh
+#!/bin/bash
+
+# Exit if any command fails
+set -e
+
+# Check arguments
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <file_list_path> <destination_bucket>"
+    exit 1
+fi
+
+file_list="$1"
+destination_bucket="$2"
+log_file="copy_results.csv"
+
+# Create or clear log file with headers
+echo "Timestamp,Source,Destination,Status" > "$log_file"
+
+# Read file list
+while IFS= read -r source; do
+    # Skip empty lines
+    [ -z "$source" ] && continue
+
+    # Normalize prefix
+    source=$(echo "$source" | sed 's/^S3:\/\//s3:\/\//')
+
+    # Extract filename
+    filename=$(basename "$source")
+
+    # Destination path
+    destination="s3://$destination_bucket/$filename"
+
+    echo "Copying: $source → $destination"
+
+    # Run AWS copy
+    if aws s3 cp "$source" "$destination" --quiet; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S'),$source,$destination,Success" >> "$log_file"
+        echo "✅ Success: $filename"
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S'),$source,$destination,Failed" >> "$log_file"
+        echo "❌ Failed: $filename" >&2
+    fi
+
+done < "$file_list"
+
+echo ""
+echo "📄 Copy completed. Log saved to: $log_file"
+
+
+⚙️ How to Run It
+
+
+Save it as:
+copy_s3_files_with_log.sh
+
+
+
+Make it executable:
+chmod +x copy_s3_files_with_log.sh
+
+
+
+Run:
+./copy_s3_files_with_log.sh /mnt/c/Users/salimiriz/Documents/filelist.txt my-destination-bucket
+
+
+
+
+🧾 Resulting CSV Log Example
+copy_results.csv
+Timestamp,Source,Destination,Status
+2025-11-11 15:23:04,s3://hw-app-ccb-prod/aiva/.../file1.pdf,s3://my-destination-bucket/file1.pdf,Success
+2025-11-11 15:23:07,s3://hw-app-ccb-prod/aiva/.../file2.pdf,s3://my-destination-bucket/file2.pdf,Failed
+
+
+Would you like me to add parallel execution (so multiple files copy at once, using background jobs) to make it much faster for large lists?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 python -m pip install --user awscli
 
 
