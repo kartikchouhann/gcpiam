@@ -1,3 +1,10 @@
+python -m pip install --user awscli
+
+
+
+
+
+
 ✅ Correct AWS CLI v2 ZIP Download Link (for Windows, no admin)
 Use this exact command (copy–paste as is):
 Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.zip" -OutFile "$env:USERPROFILE\Downloads\AWSCLIV2.zip"
