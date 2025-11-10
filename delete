@@ -1,3 +1,17 @@
+msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+
+
+
+
+
+
+
+
+
+
+
+
+
 #!/bin/bash
 
 # Force delete all DELETE_FAILED stacks
