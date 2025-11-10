@@ -1,10 +1,6 @@
-🧩 Enhanced Bash Script — copy_s3_files_with_log.sh
 #!/bin/bash
-
-# Exit if any command fails
 set -e
 
-# Check arguments
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <file_list_path> <destination_bucket>"
     exit 1
@@ -14,31 +10,34 @@ file_list="$1"
 destination_bucket="$2"
 log_file="copy_results.csv"
 
-# Create or clear log file with headers
+# Create or reset the log file
 echo "Timestamp,Source,Destination,Status" > "$log_file"
 
-# Read file list
-while IFS= read -r source; do
+# Read each S3 path from the input file
+while IFS= read -r raw_source; do
     # Skip empty lines
-    [ -z "$source" ] && continue
+    [ -z "$raw_source" ] && continue
 
-    # Normalize prefix
+    # Clean CRLF (Windows line endings)
+    source=$(echo "$raw_source" | tr -d '\r')
+
+    # Normalize uppercase S3:// → lowercase s3://
     source=$(echo "$source" | sed 's/^S3:\/\//s3:\/\//')
 
-    # Extract filename
+    # Extract filename safely
     filename=$(basename "$source")
 
-    # Destination path
+    # Build destination S3 path
     destination="s3://$destination_bucket/$filename"
 
     echo "Copying: $source → $destination"
 
-    # Run AWS copy
-    if aws s3 cp "$source" "$destination" --quiet; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S'),$source,$destination,Success" >> "$log_file"
+    # Use quotes inside aws command to handle special characters (:, spaces, etc.)
+    if aws s3 cp "$source" "$destination" --quiet --no-guess-mime-type; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S'),\"$source\",\"$destination\",Success" >> "$log_file"
         echo "✅ Success: $filename"
     else
-        echo "$(date '+%Y-%m-%d %H:%M:%S'),$source,$destination,Failed" >> "$log_file"
+        echo "$(date '+%Y-%m-%d %H:%M:%S'),\"$source\",\"$destination\",Failed" >> "$log_file"
         echo "❌ Failed: $filename" >&2
     fi
 
@@ -46,202 +45,3 @@ done < "$file_list"
 
 echo ""
 echo "📄 Copy completed. Log saved to: $log_file"
-
-
-⚙️ How to Run It
-
-
-Save it as:
-copy_s3_files_with_log.sh
-
-
-
-Make it executable:
-chmod +x copy_s3_files_with_log.sh
-
-
-
-Run:
-./copy_s3_files_with_log.sh /mnt/c/Users/salimiriz/Documents/filelist.txt my-destination-bucket
-
-
-
-
-🧾 Resulting CSV Log Example
-copy_results.csv
-Timestamp,Source,Destination,Status
-2025-11-11 15:23:04,s3://hw-app-ccb-prod/aiva/.../file1.pdf,s3://my-destination-bucket/file1.pdf,Success
-2025-11-11 15:23:07,s3://hw-app-ccb-prod/aiva/.../file2.pdf,s3://my-destination-bucket/file2.pdf,Failed
-
-
-Would you like me to add parallel execution (so multiple files copy at once, using background jobs) to make it much faster for large lists?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-python -m pip install --user awscli
-
-
-
-
-
-
-✅ Correct AWS CLI v2 ZIP Download Link (for Windows, no admin)
-Use this exact command (copy–paste as is):
-Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.zip" -OutFile "$env:USERPROFILE\Downloads\AWSCLIV2.zip"
-
-🔹 Notice there’s no “cli.” before amazonaws.com.
-The correct domain is awscli.amazonaws.com, not awscli.amazonaws.com/cli.
-
-🧩 Next Steps (After Successful Download)
-1️⃣ Extract it
-Expand-Archive "$env:USERPROFILE\Downloads\AWSCLIV2.zip" -DestinationPath "$env:USERPROFILE\AWSCLI"
-
-2️⃣ Add to PATH for this session
-$env:PATH += ";$env:USERPROFILE\AWSCLI\AWSCLIV2"
-
-3️⃣ Test it
-aws --version
-
-✅ You should now see the AWS CLI version info.
-
-Would you like me to give you a ready-to-run script that does all three steps (download, extract, and set path) automatically for your current VS Code PowerShell terminal — no admin rights needed?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-⚙️ Step-by-Step: Install & Use AWS CLI in VS Code (No Admin Rights)
-🧩 1️⃣ Download the Portable ZIP Installer
-
-In your VS Code PowerShell terminal, run:
-
-Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.zip" -OutFile "$env:USERPROFILE\Downloads\AWSCLIV2.zip"
-
-🗂️ 2️⃣ Extract It to a User Folder
-
-Run:
-
-Expand-Archive "$env:USERPROFILE\Downloads\AWSCLIV2.zip" -DestinationPath "$env:USERPROFILE\AWSCLI"
-
-
-After this, the folder:
-
-C:\Users\<your_username>\AWSCLI\AWSCLIV2\
-
-
-will contain aws.exe.
-
-🧠 3️⃣ Add It Temporarily to the PATH
-
-Still in PowerShell (inside VS Code):
-
-$env:PATH += ";$env:USERPROFILE\AWSCLI\AWSCLIV2"
-
-
-Then test:
-
-aws --version
-
-
-✅ If this prints the version, it means the CLI works now inside VS Code.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
-
-
-
-
-
-
-
-
-
-
-
-
-
-#!/bin/bash
-
-# Force delete all DELETE_FAILED stacks
-# Properly empties versioned buckets before retrying delete
-
-for stack in $(aws cloudformation list-stacks \
-  --stack-status-filter DELETE_FAILED \
-  --query "StackSummaries[].StackName" \
-  --output text); do
-
-  echo "🔍 Checking stack: $stack"
-
-  # Find buckets that failed deletion
-  buckets=$(aws cloudformation describe-stack-resources --stack-name "$stack" \
-    --query "StackResources[?ResourceType=='AWS::S3::Bucket' && ResourceStatus=='DELETE_FAILED'].PhysicalResourceId" \
-    --output text)
-
-  if [ -n "$buckets" ]; then
-    for bucket in $buckets; do
-      echo "🪣 Emptying bucket: $bucket (all versions + delete markers)"
-
-      # Delete all object versions
-      versions=$(aws s3api list-object-versions --bucket "$bucket" --output json \
-        --query "{Objects: Versions[].{Key:Key,VersionId:VersionId}}")
-
-      if [ "$(echo $versions | jq '.Objects | length')" -gt 0 ]; then
-        echo "   - Deleting $(echo $versions | jq '.Objects | length') versions..."
-        aws s3api delete-objects --bucket "$bucket" --delete "$versions" || true
-      fi
-
-      # Delete all delete markers
-      markers=$(aws s3api list-object-versions --bucket "$bucket" --output json \
-        --query "{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}")
-
-      if [ "$(echo $markers | jq '.Objects | length')" -gt 0 ]; then
-        echo "   - Deleting $(echo $markers | jq '.Objects | length') delete markers..."
-        aws s3api delete-objects --bucket "$bucket" --delete "$markers" || true
-      fi
-
-      # Try a final empty + force remove for safety
-      aws s3 rm s3://$bucket --recursive || true
-      aws s3 rb s3://$bucket --force || true
-    done
-  fi
-
-  echo "🧹 Retrying stack delete: $stack"
-  aws cloudformation delete-stack --stack-name "$stack" || true
-done
