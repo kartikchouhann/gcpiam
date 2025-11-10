@@ -1,3 +1,51 @@
+⚙️ Step-by-Step: Install & Use AWS CLI in VS Code (No Admin Rights)
+🧩 1️⃣ Download the Portable ZIP Installer
+
+In your VS Code PowerShell terminal, run:
+
+Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.zip" -OutFile "$env:USERPROFILE\Downloads\AWSCLIV2.zip"
+
+🗂️ 2️⃣ Extract It to a User Folder
+
+Run:
+
+Expand-Archive "$env:USERPROFILE\Downloads\AWSCLIV2.zip" -DestinationPath "$env:USERPROFILE\AWSCLI"
+
+
+After this, the folder:
+
+C:\Users\<your_username>\AWSCLI\AWSCLIV2\
+
+
+will contain aws.exe.
+
+🧠 3️⃣ Add It Temporarily to the PATH
+
+Still in PowerShell (inside VS Code):
+
+$env:PATH += ";$env:USERPROFILE\AWSCLI\AWSCLIV2"
+
+
+Then test:
+
+aws --version
+
+
+✅ If this prints the version, it means the CLI works now inside VS Code.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
 
 
