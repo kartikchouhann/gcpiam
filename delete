@@ -1,2 +1,42 @@
-I’m reviewing the WAF call transcription, and I had a quick question.
-Do you have the migration script or any instruction/documentation related to the WAF migration process?
+#!/bin/bash
+
+OUTPUT_FILE="bucket_public_test_logic.csv"
+echo "Bucket,Status,Reason" > "$OUTPUT_FILE"
+
+aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | while read bucket; do
+  echo "Checking: $bucket"
+
+  # 1️⃣ Check Block Public Access
+  bpa_status=$(aws s3api get-public-access-block \
+    --bucket "$bucket" \
+    --query "PublicAccessBlockConfiguration" \
+    --output text 2>/dev/null)
+
+  if [[ -z "$bpa_status" ]]; then
+    bpa_off="yes"
+  else
+    bpa_off="no"
+  fi
+
+  # 2️⃣ Check bucket policy public
+  policy_public=$(aws s3api get-bucket-policy-status \
+    --bucket "$bucket" \
+    --query "PolicyStatus.IsPublic" \
+    --output text 2>/dev/null)
+
+  # 3️⃣ Check ACL public
+  acl_public=$(aws s3api get-bucket-acl \
+    --bucket "$bucket" \
+    --query "Grants[?Grantee.URI=='http://acs.amazonaws.com/groups/global/AllUsers']" \
+    --output text 2>/dev/null)
+
+  # 🧠 FINAL LOGIC (as requested)
+  if [[ "$bpa_off" == "yes" || "$policy_public" == "True" || -n "$acl_public" ]]; then
+    echo "$bucket,Public,BPA off or public ACL/policy detected" >> "$OUTPUT_FILE"
+  else
+    echo "$bucket,Private,BPA on and no public ACL or policy" >> "$OUTPUT_FILE"
+  fi
+
+done
+
+echo "Done. Output: $OUTPUT_FILE"
