@@ -1,38 +1,18 @@
-dos2unix bucket_list.txt
-
-
-
-enable_bpa_from_file.sh
-
-
-
 #!/bin/bash
+set -euo pipefail
 
 BUCKET_FILE="bucket_list.txt"
 
-if [ ! -f "$BUCKET_FILE" ]; then
-  echo "❌ Bucket list file not found: $BUCKET_FILE"
-  exit 1
-fi
+while IFS= read -r bucket || [ -n "$bucket" ]; do
+  bucket=$(echo "$bucket" | sed 's/\r//g' | xargs)
 
-while read -r bucket; do
-  # Skip empty lines
   [[ -z "$bucket" ]] && continue
 
-  echo "🔒 Enabling Block Public Access on bucket: $bucket"
+  echo "🔒 Enabling BPA on: [$bucket]"
 
   aws s3api put-public-access-block \
     --bucket "$bucket" \
     --public-access-block-configuration \
       BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 
-  if [ $? -eq 0 ]; then
-    echo "  ✅ BPA enabled"
-  else
-    echo "  ❌ Failed (check permissions or bucket name)"
-  fi
-
-  echo "--------------------------------------"
 done < "$BUCKET_FILE"
-
-echo "🎉 BPA process completed"
