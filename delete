@@ -1,3 +1,7 @@
+enable_bpa_from_file.sh
+
+
+
 #!/bin/bash
 
 BUCKET_FILE="bucket_list.txt"
